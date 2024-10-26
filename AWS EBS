@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id') // Jenkins credentials ID
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key') // Jenkins credentials ID
+        AWS_REGION = 'us-west-2' // Specify your desired region
+        APP_NAME = 'your-app-name' // Name of your Elastic Beanstalk application
+        ENV_NAME = 'your-env-name' // Name of your Elastic Beanstalk environment
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/your-repo/your-project.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                // Run your build command
+                sh 'mvn clean package' // Adjust this command based on your project
+            }
+        }
+
+        stage('Deploy to Elastic Beanstalk') {
+            steps {
+                script {
+                    // Zip the application for deployment
+                    sh 'zip -r app.zip target/*.jar' // Adjust the path based on your output
+
+                    // Deploy to Elastic Beanstalk
+                    sh """
+                    aws configure set aws_access_key_id ${AWS_ACCESS_KEY_ID}
+                    aws configure set aws_secret_access_key ${AWS_SECRET_ACCESS_KEY}
+                    aws configure set region ${AWS_REGION}
+                    
+                    # Create or update the application version
+                    aws elasticbeanstalk create-application-version --application $APP_NAME --version-label v1 --source-bundle S3Bucket=my-bucket,S3Key=app.zip --description "Version 1"
+                    
+                    # Update the environment to deploy the new version
+                    aws elasticbeanstalk update-environment --environment-name $ENV_NAME --version-label v1
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment succeeded!'
+        }
+        failure {
+            echo 'Deployment failed.'
+        }
+    }
+}
